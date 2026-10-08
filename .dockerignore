@@ -1,0 +1,9 @@
+.git
+.cursor
+__pycache__
+.pytest_cache
+data/*.npz
+data/large
+results
+figures
+pip_install.log

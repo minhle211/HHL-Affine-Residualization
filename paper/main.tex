@@ -1,0 +1,390 @@
+% XeLaTeX.  Chữ đen: bản thảo 7/10/2026 còn giữ.
+% Chữ xanh (revised): đoạn viết lại hoặc thêm, vì số đo không còn cho phép câu cũ.
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage[vietnamese]{babel}
+\babelfont{rm}{Times New Roman}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage[numbers,sort&compress]{natbib}
+
+\graphicspath{{../figures/}}
+\definecolor{revised}{RGB}{0,82,155}
+\newcommand{\rev}[1]{{\color{revised}#1}}
+\newenvironment{revisedblock}{\par\color{revised}\ignorespaces}{\par}
+\newcommand{\revcap}[1]{\caption{\protect\color{revised}#1}}
+
+\title{Dư hóa affine cho thuật toán HHL:\\
+từ tiền điều kiện đến đánh đổi tài nguyên và sai số}
+\author{Lê Vũ Quang Minh}
+\date{7 tháng 10 năm 2026}
+
+\begin{document}
+\maketitle
+
+\noindent
+\fcolorbox{revised}{white}{%
+\begin{minipage}{0.96\textwidth}
+\small
+\textbf{Chú thích màu.}
+Chữ đen giữ nguyên cách diễn đạt của bản thảo khi nội dung vẫn đúng.
+{\color{revised}Chữ xanh là đoạn đã viết lại hoặc thêm mới.}
+Phần xanh thay các khẳng định về \(\kappa_{\mathrm{eff}}\to 1\), chặn \(\Lambda_z\le\sqrt{2}\), việc mạch lượng tử tự sửa \(\hat z\), và mức chính xác của mạng nơ-ron.
+\end{minipage}}
+\vspace{0.8em}
+
+\begin{abstract}
+\color{revised}
+Báo cáo này khảo sát dư hóa affine có ngân sách cho bộ giải lai của hệ \(Ax=b\).
+Một bước cổ điển lập vector giải thích \(z\) trên \(k\) mode riêng, rồi mạch HHL được chỉnh theo phổ còn lại và nghiệm được ghép lại bởi \(x=z+\lVert b_{\mathrm{res}}\rVert\, y\).
+Trên mô phỏng statevector chính xác, không nhiễu thiết bị, độ trung thực của nghiệm giữ từ \(0{,}999\) trở lên.
+Sai số tương đối của HHL chuẩn nằm khoảng \(0{,}005\) đến \(0{,}06\), chủ yếu do rời rạc hóa ước lượng pha.
+Khi \(z\) đúng và ngân sách đủ để \(\kappa_{\mathrm{eff}}\) tụt, sai số lai xuống mức làm tròn số.
+Tiêu chí năng lượng không bảo đảm điều đó: có hệ \(N=4\), \(\kappa=1000\), \(k=1\) vẫn để \(\kappa_{\mathrm{eff}}\) khoảng \(1000\).
+Không chứng minh chặn \(\Lambda_z\le\sqrt{2}\).
+Mạch thu hẹp không sửa được sai số của \(z\) nằm trên mode đã loại; mạch đủ \(\kappa\) sửa được, và mất phần tiết kiệm mạch.
+Mạng nơ-ron hiện tại không thay được phân tích riêng: sai số tương đối trung vị của \(z\) là \(0{,}68\) tại \(N=2\) (8\,000 mẫu huấn luyện) và khoảng \(0{,}95\)--\(0{,}99\) tại \(N=4\) và \(N=8\).
+So với lối tắt của Dalzell (2024), khoảng \(\kappa\ln(2\sqrt{2}/\varepsilon)\) truy vấn block-encoding khi đã biết chuẩn nghiệm, dư hóa chính xác chỉ rẻ hơn trên phổ có cụm giá trị riêng rất nhỏ.
+Trên phổ log-uniform của mã nguồn, tại \(N=64\), \(\kappa=10^{4}\), \(\varepsilon=10^{-2}\), chi phí lượng tử sau khi loại tám mode vẫn khoảng mười lần lối tắt ấy.
+Báo cáo không tuyên bố tăng tốc lượng tử hay lợi thế thời gian tường.
+\end{abstract}
+
+\section{Nền tảng thuật toán HHL và VQLS}
+
+\subsection{Harrow--Hassidim--Lloyd (HHL)}
+Thuật toán HHL chuẩn bị trạng thái tỉ lệ với nghiệm của \(Ax=b\) khi \(A\) thưa và số điều kiện \(\kappa\) không quá lớn \citep{harrow2009}.
+Cấu trúc cốt lõi gồm ba giai đoạn:
+\begin{enumerate}
+  \item Ước lượng pha lượng tử, mô phỏng \(e^{iAt}\) để đưa các giá trị riêng \(\lambda_j\) vào thanh ghi đồng hồ.
+  \item Quay có điều kiện qubit phụ một góc \(\theta=\arcsin(C/\lambda_j)\), với \(C\) là hằng số chuẩn hóa.
+  \item Ước lượng pha đảo, gỡ rối thanh ghi đồng hồ, để lại trạng thái \(\lvert x\rangle\propto A^{-1}\lvert b\rangle\) sau khi hậu chọn qubit phụ.
+\end{enumerate}
+
+\begin{revisedblock}
+Mức tăng theo chiều \(N\) của HHL cần thêm hai giả thiết mà mạch dày đặc trong báo cáo này không có: block-encoding thưa của \(A\), và chuẩn bị \(\lvert b\rangle\) hiệu quả.
+Độ phức tạp truy vấn còn phụ \(\kappa\) và \(1/\varepsilon\) xấu hơn các bộ giải tối ưu sau này, vốn đạt \(O(\kappa\log(1/\varepsilon))\) \citep{costa2022,dalzell2024}.
+Trong mã nguồn, \(e^{iAt}\) là \texttt{UnitaryGate} chính xác, không phải công thức Trotter hay tổ hợp tuyến tính các unitary.
+Số cổng CX sau biên dịch vì vậy chỉ là xu hướng, không phải số cổng trên phần cứng.
+\end{revisedblock}
+
+\subsection{Variational Quantum Linear Solver (VQLS)}
+Để tránh độ sâu của ước lượng pha trên phần cứng nhiễu, VQLS tối ưu một mạch ansatz bằng cách cực tiểu một hàm chi phí, sao cho trạng thái đầu ra tiến tới nghiệm chuẩn hóa \citep{bravoprieto2023}.
+Khi \(\kappa\gg 1\), cảnh quan chi phí có thể gặp cao nguyên cằn, gradient tắt và vòng lặp không hội tụ.
+
+\begin{revisedblock}
+Kho mã này không xây mạch VQLS và không đo gradient.
+Các mục sau không dùng VQLS như một kết quả.
+Cao nguyên cằn được nhắc chỉ như động cơ của bài toán, không phải đại lượng đã đo.
+\end{revisedblock}
+
+\subsection{Nút thắt: số điều kiện \(\kappa\)}
+Cả HHL và VQLS đều chịu \(\kappa=\lambda_{\max}/\lambda_{\min}\).
+Khi \(\kappa\gg 1\), HHL cần thanh ghi đồng hồ dài để phân giải giá trị riêng nhỏ, và mạch ước lượng pha trở nên sâu.
+
+\section{Tiền điều kiện và mô phỏng Hamiltonian}
+
+\subsection{Tiền điều kiện}
+Cách cổ điển để xử lý \(\kappa\) lớn là nhân một tiền điều kiện \(M\), giải \(MAx=Mb\), và chọn \(M\) sao cho số điều kiện của \(MA\) gần 1 \citep{clader2013}.
+Đưa \(M\) lên mạch lượng tử thường phát sinh chi phí phụ, có khi nuốt phần lợi từ \(\kappa\) nhỏ hơn.
+
+\begin{revisedblock}
+Với block-encoding, nhân lượng tử của hai toán tử đã chuẩn hóa thường không giảm số điều kiện hiệu dụng: thừa số dưới chuẩn hóa bù lại phần \(\kappa\) đã giảm \citep{lapworth2025}.
+Nhân cổ điển \(PA\) rồi mới mã hóa tích thì khác, và có thể giảm số pha của QSVT trên một số ma trận CFD.
+Dư hóa affine không xây \(M\).
+Nó tách nghiệm, không thay ma trận đưa vào mạch.
+\end{revisedblock}
+
+\subsection{Mô phỏng Hamiltonian}
+Bước đắt của ước lượng pha là các lũy thừa có điều kiện của \(e^{iAt}\).
+Chuỗi Trotter--Suzuki tách Hamiltonian thành các cổng cơ sở.
+Tổ hợp tuyến tính các unitary và block-encoding cho một cách khác để giảm độ phức tạp cổng \citep{gilyen2019}.
+
+\begin{revisedblock}
+Mạch trong kho mã không dùng hai kỹ thuật đó.
+Thanh ghi đồng hồ được chọn từ phổ mục tiêu:
+\(n=\lceil\log_2(\kappa_{\mathrm{eff}}/0{,}75)\rceil\) cộng thêm bit, cộng một bit nữa nếu phổ có dấu;
+thời gian tiến hóa đưa \(\max\lvert\lambda\rvert\) tới 75\% dải pha;
+hằng số quay là \(C=\min\lvert\lambda\rvert\) trên phổ mục tiêu.
+Thanh ghi bị chặn 12 qubit, nên \(\kappa=10^{4}\) trong lưới nhỏ bị giới hạn độ phân giải.
+\end{revisedblock}
+
+\section{Dư hóa affine}
+Khác với tiền điều kiện, dư hóa affine không đổi \(A\).
+Nghiệm được tách
+\begin{equation}
+  x = z + y,
+  \label{eq:split}
+\end{equation}
+trong đó \(z\) nằm trên các mode khó và do máy cổ điển tính, còn phần trên các mode dễ giao cho mạch lượng tử.
+Với phân tích giá trị kỳ dị \(A=U\Sigma V^{\mathsf T}\),
+\begin{equation}
+  x = \sum_j \frac{\beta_j}{\sigma_j} v_j,
+  \qquad \beta_j = u_j^{\mathsf T} b.
+  \label{eq:svd}
+\end{equation}
+
+\begin{revisedblock}
+Mã nguồn làm việc với \(A\) Hermitian, \(A=U\operatorname{diag}(\lambda)U^{\mathsf H}\) và \(\beta=U^{\mathsf H}b\).
+Ma trận không Hermitian được nhúng thành \(\bigl[\begin{smallmatrix}0&A\\ A^{\mathsf T}&0\end{smallmatrix}\bigr]\), có phổ \(\pm\sigma_i\), rồi dùng thanh ghi bù hai.
+Công thức ghép đúng với chuẩn của vế phải dư là
+\begin{equation}
+  z = \sum_{i\in R}\frac{\beta_i}{\lambda_i}u_i,
+  \qquad
+  b_{\mathrm{res}} = P_{\mathrm{keep}}(b-Az),
+  \qquad
+  x = z + \lVert b_{\mathrm{res}}\rVert\, y,
+  \label{eq:hybrid}
+\end{equation}
+và \(y\) là nghiệm HHL của \(b_{\mathrm{res}}/\lVert b_{\mathrm{res}}\rVert\).
+Phép chiếu \(P_{\mathrm{keep}}\) lên các mode giữ lại là cần: rò số lên mode đã loại sẽ bị khuếch đại bởi \(1/\lambda_{\min}\).
+Phương trình~\eqref{eq:split} là ảnh của~\eqref{eq:hybrid} sau khi đã hấp thụ \(\lVert b_{\mathrm{res}}\rVert\) vào \(y\).
+\end{revisedblock}
+
+\section{Dư hóa theo ngân sách}
+
+\subsection{Độ khó của từng mode}
+Ngân sách không nhất thiết dành cho các \(\sigma_j\) nhỏ nhất.
+Mỗi hướng có năng lượng
+\begin{equation}
+  E_j = \Bigl\lvert\frac{\beta_j}{\sigma_j}\Bigr\rvert.
+  \label{eq:energy}
+\end{equation}
+Máy cổ điển dùng ngân sách \(k\) để đưa các hướng \(E_j\) lớn vào \(z\).
+Hướng có \(\sigma_j\) nhỏ nhưng \(\beta_j\approx 0\) không đứng đầu danh sách này.
+
+\begin{revisedblock}
+Đó là tiêu chí \texttt{energy}.
+Tiêu chí \texttt{smallest} thì lấy các \(\lvert\lambda_i\rvert\) nhỏ nhất, và chỉ tiêu chí này bảo đảm \(\kappa_{\mathrm{eff}}\) giảm.
+Trên lưới đã lưu, tiêu chí năng lượng có một hệ \(N=4\), \(\kappa=1000\), \(k=1\), mà \(\kappa_{\mathrm{eff}}\) vẫn khoảng \(1000\): mode mang năng lượng lớn không phải giá trị riêng nhỏ nhất.
+\end{revisedblock}
+
+\subsection{\rev{Ba đại lượng, không phải ba bảo chứng}}
+
+\begin{revisedblock}
+Bản thảo gọi ba ``bảo chứng'': \(\kappa_{\mathrm{eff}}\) tiến về 1, chặn cộng \(\Lambda_z\le\sqrt{2}\), và một trọng lượng nghịch \(\Gamma_z\) giúp VQLS khỏi cao nguyên cằn.
+Ba câu đó không còn trong báo cáo.
+Thay vào đó là ba phát biểu khớp mã nguồn và số đo.
+
+\paragraph{1. Số điều kiện hiệu dụng.}
+\(\kappa_{\mathrm{eff}}=\max\lvert\lambda_{\mathrm{keep}}\rvert/\min\lvert\lambda_{\mathrm{keep}}\rvert\).
+Nó tiến về 1 chỉ khi tập bị loại phủ các giá trị riêng nhỏ.
+Tiêu chí năng lượng không bảo đảm điều này, như hệ \(N=4\) ở trên.
+Trên phổ log-uniform cỡ \(N=64\), loại tám mode nhỏ nhất vẫn để \(\kappa_{\mathrm{eff}}\) ở hàng nghìn khi \(\kappa=10^{4}\).
+Hình~\ref{fig:kappa} vẽ \(\kappa_{\mathrm{eff}}\) trung bình theo ngân sách trên lưới \(N\le 8\).
+
+\paragraph{2. Ghép nghiệm khi \(z\) đúng.}
+Các vector riêng của \(A\) Hermitian trực giao.
+Nếu \(z\) đúng là phần của \(x\) trên các mode đã loại thì
+\begin{equation}
+  \lVert x\rVert^2 = \lVert z\rVert^2 + \lVert x-z\rVert^2.
+  \label{eq:pythagoras}
+\end{equation}
+Không có triệt tiêu độ lớn trong phép cộng này.
+Đẳng thức~\eqref{eq:pythagoras} không phải chặn \(\Lambda_z\le\sqrt{2}\), và không còn đúng theo cùng một nghĩa khi \(\hat z=z+\delta\) lệch khỏi không gian riêng.
+Báo cáo không tuyên bố chặn ấy.
+
+\paragraph{3. Mạch thu hẹp không đo VQLS.}
+Đại lượng đã đo là số qubit đồng hồ, độ sâu, số CX, xác suất hậu chọn và sai số của HHL, không phải \(\Gamma_z\) hay gradient của VQLS.
+Xác suất thành công không luôn tăng.
+Với \(C=\lambda_{\min}\) của phổ mục tiêu,
+\(P(\text{qubit phụ}=1)=\sum_i\lvert\beta_i\rvert^2(C/\lambda_i)^2\).
+Nếu \(b\) nằm nhiều trên mode khó, HHL chuẩn đã có xác suất cao vì số hạng đó bằng 1.
+Bỏ mode đó có thể làm xác suất giảm khi phần còn lại nằm trên giá trị riêng lớn.
+Trên lưới, \(N=4\), \(\kappa=10\), \(k=1\): xác suất trung bình khoảng \(0{,}18\), trong khi \(k=0\) khoảng \(0{,}41\).
+\end{revisedblock}
+
+\section{Học sâu thay cho phân tích riêng}
+
+\subsection{Phân tích riêng đủ để giải hệ}
+Phân tích giá trị kỳ dị đầy đủ, hoặc phân tích riêng Hermitian, có giá \(O(N^3)\) với ma trận dày.
+Với ma trận rất lớn, bước này không phải một tiền xử lý rẻ.
+
+\begin{revisedblock}
+Điểm chặt hơn độ phức tạp: khi đã có đủ cặp riêng và các hệ số \(\beta_i\), nghiệm là \(x_i=\beta_i/\lambda_i\).
+Bước lượng tử không thêm thông tin.
+Mọi số ``loại mode chính xác, không tính giá cổ điển'' ở Mục~\ref{sec:queries} vì vậy chỉ là chi phí lượng tử, không phải thời gian của cả thuật toán.
+\end{revisedblock}
+
+\subsection{Mạng dự đoán vector giải thích}
+Hướng còn mở là học một ánh xạ \(f_\theta(A,b)\approx z\) để khỏi phân tích riêng mỗi lần giải.
+Mạng trong kho mã là một MLP, với mất mát sai số tương đối của \(z\) cộng một số hạng vật lý.
+
+\begin{revisedblock}
+MLP hiện không đạt độ chính xác cần cho mạch thu hẹp.
+Sai số tương đối trung vị của \(\hat z\), tức \(\lVert\hat z-z\rVert/\lVert z\rVert\), là \(0{,}68\) tại \(N=2\) (8\,000 mẫu huấn luyện, 1\,000 mẫu kiểm tra) và \(0{,}95\) tại \(N=4\) với cùng cỡ mẫu.
+Tại \(N=8\), 400 mẫu huấn luyện, trung vị là \(0{,}99\).
+Sai số nghiệm ở chế độ thu hẹp đi theo sai số này: trung vị \(0{,}67\) tại \(N=2\) và \(0{,}84\) tại \(N=4\).
+Dự đoán \(1/\lambda_{\min}\) từ các phần tử ma trận, bằng MLP này, không hơn dự đoán \(z=0\) một khi \(N\) tăng.
+Tỉ lệ các mode khó gần hòa (tỉ số năng lượng dưới \(1{,}5\)), nơi \(z\) gián đoạn, là \(0{,}7\%\) tại \(N=2\), \(13\%\) tại \(N=4\) và \(26\%\) tại \(N=8\).
+Chưa có chứng cứ cho thời gian \(O(N)\) hoặc \(O(N^2)\) với sai số đủ nhỏ.
+\end{revisedblock}
+
+\subsection{\rev{Sai số của \(\hat z\) không tự được sửa}}
+
+\begin{revisedblock}
+Nếu \(\hat z=z+\delta\) và \(\delta\) nằm trên một mode đã loại, có hai mạch.
+
+Chế độ \texttt{reduced} chiếu phần dư lên các mode giữ lại và chỉnh ước lượng pha theo \(\kappa_{\mathrm{eff}}\).
+Mạch không thấy \(\delta\).
+Sai số nghiệm đúng bằng \(\lVert P_{\mathrm{hard}}\delta\rVert/\lVert x\rVert\), và tăng tuyến tính với \(\lVert\delta\rVert/\lVert z\rVert\).
+Một lệch \(10\%\) trên mode đã loại cho sai số nghiệm khoảng \(10\%\).
+
+Chế độ \texttt{full} giữ phần dư thô \(b-A\hat z\).
+Thành phần \(\lambda_{\min}\delta\) vẫn còn, nên ước lượng pha phải dùng \(\kappa\) đầy đủ.
+Sai số được kéo về sàn rời rạc hóa của HHL, khoảng \(10^{-3}\) đến \(10^{-2}\) trong các lần chạy thử, và số CX trở lại mức của mạch đầy đủ.
+Trong một lần minh họa, mạch đầy đủ dùng 1\,435 CX trong khi mạch thu hẹp dùng 185 CX.
+
+Hai chế độ này loại câu ``lượng tử sửa hết sai số của mạng, nghiệm vẫn chính xác tuyệt đối''.
+Hình~\ref{fig:tradeoff} là số đo của sự đánh đổi.
+\end{revisedblock}
+
+\section{\rev{Số đo}}
+\label{sec:results}
+
+\begin{revisedblock}
+Mọi mạch HHL dưới đây là statevector chính xác, không nhiễu thiết bị, \(N\le 8\) trừ mục truy vấn.
+Lưới tài nguyên lấy hai hệ ngẫu nhiên cho mỗi cặp \((N,\kappa)\), tiêu chí năng lượng, rồi lấy trung bình.
+Phổ là log-uniform trong \([1/\kappa,1]\).
+
+\subsection{Độ chính xác}
+Độ trung thực \(\lvert\langle\hat x\vert x\rangle\rvert^2\) trên lưới giữ từ \(0{,}999\) trở lên (Hình~\ref{fig:fid}).
+Sai số tương đối của HHL chuẩn (\(k=0\)) nằm từ khoảng \(5\cdot 10^{-3}\) đến \(6\cdot 10^{-2}\).
+Phần lớn số đó là rời rạc hóa chuẩn nghiệm trong ước lượng pha, không phải sai hướng của \(\lvert x\rangle\).
+
+Khi \(z\) đúng và ngân sách đưa \(\kappa_{\mathrm{eff}}\) về gần 1, sai số tương đối xuống \(10^{-16}\)--\(10^{-14}\).
+Ví dụ \(N=4\), \(\kappa=1000\): HHL chuẩn có sai số \(5{,}2\cdot 10^{-3}\); với \(k=3\), sai số trung bình là \(8{,}6\cdot 10^{-14}\).
+Một ngân sách nhỏ chưa đủ.
+Cùng ô lưới, \(k=1\) vẫn có sai số \(5{,}3\cdot 10^{-3}\), ngang HHL chuẩn, vì mode bị loại theo năng lượng không phải mode làm \(\kappa\) lớn.
+
+QSVT với đa thức chính xác tới \(\varepsilon=10^{-2}\), trên bốn hệ định thời ở Mục~\ref{sec:wall}, cho sai số tương đối từ \(6\cdot 10^{-5}\) đến \(4\cdot 10^{-3}\) và độ trung thực từ \(0{,}99999\).
+Đó là sai số của đa thức, không phải của ước lượng pha.
+
+\subsection{Tài nguyên mạch so với HHL chuẩn}
+Tại \(N=4\), \(\kappa=1000\), HHL chuẩn dùng 12 qubit đồng hồ, độ sâu 8\,800 và 4\,637 cổng CX sau biên dịch về \(\{u,\mathrm{CX}\}\), mức tối ưu 1.
+Với \(k=2\), các số trung bình là khoảng \(4{,}5\) qubit đồng hồ, độ sâu 266 và 159 CX.
+Tại \(N=8\), \(\kappa=1000\), số CX giảm từ 5\,632 (\(k=0\)) xuống 1\,277 (\(k=3\)).
+Hình~\ref{fig:clock} và Hình~\ref{fig:cx} là cả lưới.
+Các số CX tuyệt đối phụ thuộc cách khai triển unitary tổng quát; chiều giảm theo \(k\) mới là kết quả.
+\end{revisedblock}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.92\textwidth]{clock_vs_kappa.png}
+  \revcap{Số qubit đồng hồ trung bình theo \(\kappa\). \(k=0\) là HHL chuẩn. Lưới \(N=2,4,8\), tiêu chí năng lượng, hai hệ mỗi ô.}
+  \label{fig:clock}
+\end{figure}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.92\textwidth]{cx_vs_kappa.png}
+  \revcap{Số cổng CX sau biên dịch. Xu hướng theo ngân sách là nội dung của hình; giá trị tuyệt đối phụ thuộc khai triển \texttt{UnitaryGate}.}
+  \label{fig:cx}
+\end{figure}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.72\textwidth]{kappa_eff_vs_budget.png}
+  \revcap{\(\kappa_{\mathrm{eff}}\) trung bình theo số mode bị loại, tiêu chí năng lượng. Một số đường gần như không giảm ở \(k=1\).}
+  \label{fig:kappa}
+\end{figure}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.92\textwidth]{fidelity_vs_kappa.png}
+  \revcap{Độ trung thực của nghiệm trên cùng lưới. Mọi ô trung bình đều từ \(0{,}999\) trở lên.}
+  \label{fig:fid}
+\end{figure}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.92\textwidth]{tradeoff_reduced_vs_full.png}
+  \revcap{Trái: sai số nghiệm theo độ lệch tương đối của \(z\) trên mode khó. Chế độ thu hẹp tăng tuyến tính; chế độ đủ \(\kappa\) nằm gần sàn của HHL. Phải: số CX của hai chế độ.}
+  \label{fig:tradeoff}
+\end{figure}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.72\textwidth]{zsource_error.png}
+  \revcap{Sai số của \(z\) so với sai số nghiệm, ngân sách 1. Điểm đặc là chế độ thu hẹp, điểm rỗng là chế độ đủ \(\kappa\).}
+  \label{fig:zsource}
+\end{figure}
+
+\begin{revisedblock}
+\subsection{Thời gian tường trên máy mô phỏng}
+\label{sec:wall}
+Thời gian dưới đây là một hệ mỗi ô, hạt giống cố định, tiêu chí \texttt{smallest}, không biên dịch mạch, trên cùng máy với mã nguồn.
+Đơn vị là mili-giây.
+\texttt{numpy.linalg.solve} luôn dưới \(0{,}01\,\mathrm{ms}\) và sai số tương đối bằng 0 ở cỡ ma trận này.
+
+\begin{center}
+\color{revised}
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+\(N\) & \(\kappa\) & NumPy & HHL & Lai \(k=1\) & Lai + QSVT & QSVT đầy đủ \\
+\midrule
+4 & 100 & 0{,}007 & 266 & 53 & 0{,}36 & 0{,}43 \\
+4 & 1000 & 0{,}005 & 1\,834 & 89 & 0{,}35 & 0{,}67 \\
+8 & 100 & 0{,}006 & 897 & 458 & 0{,}40 & 0{,}35 \\
+8 & 1000 & 0{,}005 & 9\,352 & 11\,045 & 0{,}54 & 1{,}02 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Khi một mode làm thanh ghi ngắn lại, mô phỏng HHL lai nhanh hơn HHL chuẩn: tại \(N=4\), \(\kappa=1000\), từ \(1{,}8\,\mathrm{s}\) xuống \(0{,}09\,\mathrm{s}\), và sai số tương đối từ \(5{,}2\cdot 10^{-3}\) xuống \(1{,}7\cdot 10^{-3}\).
+Khi một mode chưa đủ, mô phỏng không nhanh hơn và có thể kém chính xác hơn.
+Tại \(N=8\), \(\kappa=1000\), lần chạy lai mất \(11{,}0\,\mathrm{s}\) so với \(9{,}4\,\mathrm{s}\) của HHL chuẩn, sai số tương đối \(0{,}062\) so với \(0{,}0076\), độ trung thực \(0{,}998\).
+QSVT mô phỏng bằng đa thức trên các giá trị riêng, nên thời gian tường của nó là phần của một mili-giây; đó không phải thời gian của mạch lượng tử.
+
+\subsection{Truy vấn so với các bộ giải 2024--2026}
+\label{sec:queries}
+Đơn vị là một lần gọi block-encoding của \(A/\lVert A\rVert\).
+HHL tính số truy vấn bằng mô phỏng Hamiltonian gần tối ưu của Low--Chuang cho từng \(e^{iAt2^j}\), rồi khuếch đại biên độ.
+QSVT tính bậc đa thức Chebyshev của nghịch đảo trơn, cũng khuếch đại biên độ.
+Lối tắt của Dalzell khi đã biết chuẩn nghiệm lấy \(\kappa\ln(2\sqrt{2}/\varepsilon)\) \citep{dalzell2024}.
+Chặn chứng minh được cho trường hợp chưa biết chuẩn, khoảng \(56\kappa+1{,}05\kappa\ln(1/\varepsilon)\), lỏng hơn nhiều so với hằng số thực tế.
+Các phép thử hằng số năm 2025--2026 cho thấy lối tắt này và bước đi đoạn nhiệt rời rạc \citep{costa2022,jennings2025} xấp xỉ nhau trên ma trận xác định dương.
+
+Hình~\ref{fig:queries} dùng trung vị của 24 hệ, \(N=64\), \(\varepsilon=10^{-2}\).
+Không có vòng thí nghiệm mới; đây là các trung vị đã tính.
+Trên phổ log-uniform, loại đúng tới tám mode rồi chạy QSVT vẫn đắt hơn lối tắt: tại \(\kappa=10^{4}\) là \(6{,}4\cdot 10^{5}\) truy vấn so với \(5{,}6\cdot 10^{4}\).
+HHL sách giáo khoa ở cùng ô là \(2{,}4\cdot 10^{8}\).
+Trên phổ có tám giá trị riêng cỡ \(1/\kappa\) và phần còn lại trong \([0{,}1,1]\), cùng \(\kappa\) và \(\varepsilon\), loại đúng các mode đó còn khoảng \(780\) truy vấn, so với \(5{,}6\cdot 10^{4}\) của lối tắt.
+Tại \(\kappa=100\) trên chính phổ cụm ấy, lối tắt lại rẻ hơn (\(564\) so với khoảng \(750\)).
+
+Lanczos thích nghi, với trần \(k\le 8\) và không quá nửa \(N\) phép nhân vector, dung sai tương đối \(0{,}1\varepsilon\), không hội tụ mode nhỏ nào trong các họ đã thử.
+Bộ giải vì vậy trả về QSVT trên toàn phổ.
+Tại \(\kappa=10^{4}\), \(\varepsilon=10^{-2}\), đó là khoảng \(2\cdot 10^{6}\) truy vấn trên log-uniform, ngang QSVT và khoảng 40 lần lối tắt.
+Trên một hệ cụm \(\kappa=10^{4}\), tám giá trị riêng nhỏ vẫn chưa đạt dung sai sau 32 bước Lanczos và chỉ lắng lại gần bước 63, tức cả không gian Krylov.
+Gradient liên hợp cổ điển đã xong trong không quá \(N\) phép nhân.
+
+Hai bài gần đây dùng chữ ``dư'' hoặc ``affine'' cho đối tượng khác.
+Phương trình giãn affine của Dalzell, Li và Su là một block-encoding chung của \(A\) và \(b\), không phải vector giải thích \(z\) \citep{li2025,dalzell2026}.
+Bộ lọc của họ có chi phí dẫn đầu \(6\lVert A^{-1}x\rVert\ln(1/\varepsilon)/(\lVert x\rVert\varepsilon)\).
+Với \(b\) ngẫu nhiên trong các hệ đã thử, tỉ số chuẩn ấy gần \(\kappa\), nên công thức đắt hơn lối tắt vì thừa số \(1/\varepsilon\).
+Bộ giải tán xạ \citep{shang2026} mã hóa phần dư thành toán tử nhảy của một Lindbladian, trộn trong thời gian \(\Theta(\kappa^2\log(1/\varepsilon))\).
+Đó là cùng kiểu phụ thuộc \(\kappa^2\) với HHL gốc, không phải dư hóa cổ điển ở đây.
+\end{revisedblock}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.92\textwidth]{query_compare.png}
+  \revcap{Trung vị số truy vấn block-encoding, \(N=64\), \(\varepsilon=10^{-2}\), 24 hệ. ``Exact deflation'' loại tới tám mode bằng phân tích riêng rồi chạy QSVT; giá cổ điển của bước ấy không cộng vào. Lối tắt Dalzell là \(\kappa\ln(2\sqrt{2}/\varepsilon)\).}
+  \label{fig:queries}
+\end{figure}
+
+\begin{revisedblock}
+\subsection{Những gì báo cáo không kết luận}
+Mô phỏng dừng ở \(N=8\) cho mạch HHL và không có nhiễu.
+Số CX không phải số cổng của một mô phỏng Hamiltonian đã tối ưu.
+Loại mode bằng phân tích riêng đầy đủ đã giải được \(Ax=b\).
+Không có tăng tốc lượng tử, không có lợi thế thời gian tường so với phép giải dày đặc, và không có chặn \(\Lambda_z\le\sqrt{2}\).
+\end{revisedblock}
+
+\bibliographystyle{unsrtnat}
+\bibliography{refs}
+
+\end{document}
