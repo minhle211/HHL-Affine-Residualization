@@ -46,6 +46,7 @@ Sai số tương đối của HHL chuẩn nằm khoảng \(0{,}005\) đến \(0{
 Khi \(z\) đúng và ngân sách đủ để \(\kappa_{\mathrm{eff}}\) tụt, sai số lai xuống mức làm tròn số.
 Tiêu chí năng lượng không bảo đảm điều đó: có hệ \(N=4\), \(\kappa=1000\), \(k=1\) vẫn để \(\kappa_{\mathrm{eff}}\) khoảng \(1000\).
 Không chứng minh chặn \(\Lambda_z\le\sqrt{2}\).
+Trên một triệu hệ với \(z\) đúng, tỉ số ấy không vượt \(\sqrt{2}\); một \(z\) lệch thì vượt. Đó là số đo, ghi ở Mục~\ref{sec:million}.
 Mạch thu hẹp không sửa được sai số của \(z\) nằm trên mode đã loại; mạch đủ \(\kappa\) sửa được, và mất phần tiết kiệm mạch.
 Mạng nơ-ron hiện tại không thay được phân tích riêng: sai số tương đối trung vị của \(z\) là \(0{,}68\) tại \(N=2\) (8\,000 mẫu huấn luyện) và khoảng \(0{,}95\)--\(0{,}99\) tại \(N=4\) và \(N=8\).
 So với lối tắt của Dalzell (2024), khoảng \(\kappa\ln(2\sqrt{2}/\varepsilon)\) truy vấn block-encoding khi đã biết chuẩn nghiệm, dư hóa chính xác chỉ rẻ hơn trên phổ có cụm giá trị riêng rất nhỏ.
@@ -375,6 +376,44 @@ Bộ giải tán xạ \citep{shang2026} mã hóa phần dư thành toán tử nh
   \revcap{Trung vị số truy vấn block-encoding, \(N=64\), \(\varepsilon=10^{-2}\), 24 hệ. ``Exact deflation'' loại tới tám mode bằng phân tích riêng rồi chạy QSVT; giá cổ điển của bước ấy không cộng vào. Lối tắt Dalzell là \(\kappa\ln(2\sqrt{2}/\varepsilon)\).}
   \label{fig:queries}
 \end{figure}
+
+\begin{revisedblock}
+\subsection{Một triệu hệ, cùng một dòng ngẫu nhiên}
+\label{sec:million}
+Số dưới đây đo ngày 9 tháng 10 bằng \texttt{bench/theory\_scale.py}.
+Mỗi ô là một tiền tố của cùng một dòng: \(10^{4}\), rồi \(10^{5}\), rồi \(10^{6}\).
+Phổ log-uniform, \(\kappa\) log-uniform trong \([10,10^{4}]\), ngân sách \(k=1\), bộ giải dư là \texttt{numpy.linalg.solve}.
+Sáu dòng: \(N=2,4,8\), tiêu chí \texttt{smallest} và \texttt{energy}.
+Bảng đủ cột nằm ở \texttt{bench/theory\_scale\_log.csv}.
+
+Trên cả một triệu hệ, sai số ghép \(\lVert z+A^{-1}b_{\mathrm{res}}-x\rVert/\lVert x\rVert\) không vượt \(5{,}2\cdot 10^{-12}\).
+Với \(z\) đúng, không có hệ nào cho \((\lVert z\rVert+\lVert x-z\rVert)/\lVert x\rVert\) lớn hơn \(\sqrt{2}\) quá \(10^{-6}\); giá trị lớn nhất ghi được nằm ở \(\sqrt{2}\) trong sai số làm tròn.
+Tiêu chí nhỏ nhất cho \(\kappa_{\mathrm{eff}}=\lvert\lambda\rvert_{\max}/\lvert\lambda\rvert_{k+1}\) khớp trên mọi hệ.
+Một lệch \(10\%\) trên mode đã loại lệch khỏi \(\lVert P_{\mathrm{hard}}\delta\rVert/\lVert x\rVert\) không quá \(5{,}2\cdot 10^{-12}\) ở mạch thu hẹp, và mạch đủ kéo sai số xuống dưới \(1{,}2\cdot 10^{-12}\).
+Một \(z\) cộng thêm \(40\lVert x\rVert\) lần một mode giữ lại thì vượt \(\sqrt{2}\) trên mọi hệ.
+Vì vậy số đo này không nâng chặn \(\Lambda_z\le\sqrt{2}\) thành một bảo chứng cho mọi \(z\).
+
+Bảng đếm số hệ mà \(\kappa_{\mathrm{eff}}>0{,}99\kappa\).
+Tỉ lệ gần như đứng yên khi mẫu tăng.
+Tại một triệu hệ, tiêu chí năng lượng còn \(19{,}1\%\) tại \(N=4\) và \(37{,}0\%\) tại \(N=8\).
+Tiêu chí nhỏ nhất còn \(0{,}41\%\) và \(1{,}18\%\): đó là các hệ mà giá trị riêng kế tiếp gần bằng giá trị riêng nhỏ nhất.
+
+\begin{center}
+\color{revised}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+\(N\) & tiêu chí & \(10^{4}\) & \(10^{5}\) & \(10^{6}\) \\
+\midrule
+2 & nhỏ nhất & 0 & 0 & 0 \\
+2 & năng lượng & 0 & 0 & 0 \\
+4 & nhỏ nhất & 40 & 449 & 4\,056 \\
+4 & năng lượng & 1\,883 & 18\,961 & 190\,957 \\
+8 & nhỏ nhất & 99 & 1\,168 & 11\,808 \\
+8 & năng lượng & 3\,625 & 37\,134 & 369\,657 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{revisedblock}
 
 \begin{revisedblock}
 \subsection{Những gì báo cáo không kết luận}
