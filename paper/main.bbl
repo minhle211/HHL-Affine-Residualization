@@ -1,0 +1,70 @@
+\begin{thebibliography}{11}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Harrow et~al.(2009)Harrow, Hassidim, and Lloyd]{harrow2009}
+Aram~W. Harrow, Avinatan Hassidim, and Seth Lloyd.
+\newblock Quantum algorithm for linear systems of equations.
+\newblock \emph{Physical Review Letters}, 103:\penalty0 150502, 2009.
+
+\bibitem[Costa et~al.(2022)Costa, An, Sanders, Su, Babbush, and
+  Berry]{costa2022}
+Pedro C.~S. Costa, Dong An, Yuval~R. Sanders, Yuan Su, Ryan Babbush, and
+  Dominic~W. Berry.
+\newblock Optimal scaling quantum linear-systems solver via discrete adiabatic
+  theorem.
+\newblock \emph{PRX Quantum}, 3:\penalty0 040303, 2022.
+
+\bibitem[Dalzell(2024)]{dalzell2024}
+Alexander~M. Dalzell.
+\newblock A shortcut to an optimal quantum linear system solver, 2024.
+
+\bibitem[Bravo-Prieto et~al.(2023)Bravo-Prieto, LaRose, Cerezo, Subasi, Cincio,
+  and Coles]{bravoprieto2023}
+Carlos Bravo-Prieto, Ryan LaRose, Marco Cerezo, Yigit Subasi, Lukasz Cincio,
+  and Patrick~J. Coles.
+\newblock Variational quantum linear solver.
+\newblock \emph{Quantum}, 7:\penalty0 1188, 2023.
+
+\bibitem[Clader et~al.(2013)Clader, Jacobs, and Sprouse]{clader2013}
+B.~David Clader, Bryan~C. Jacobs, and Chad~R. Sprouse.
+\newblock Preconditioned quantum linear system algorithm.
+\newblock \emph{Physical Review Letters}, 110:\penalty0 250504, 2013.
+
+\bibitem[Lapworth and S{\"u}nderhauf(2025)]{lapworth2025}
+Leigh Lapworth and Christoph S{\"u}nderhauf.
+\newblock Preconditioned block encodings for quantum linear systems, 2025.
+
+\bibitem[Gily{\'e}n et~al.(2019)Gily{\'e}n, Su, Low, and Wiebe]{gilyen2019}
+Andr{\'a}s Gily{\'e}n, Yuan Su, Guang~Hao Low, and Nathan Wiebe.
+\newblock Quantum singular value transformation and beyond: exponential
+  improvements for quantum matrix arithmetics.
+\newblock In \emph{Proceedings of the 51st Annual ACM SIGACT Symposium on
+  Theory of Computing}, pages 193--204, 2019.
+
+\bibitem[Jennings et~al.(2025)Jennings, Lostaglio, Pallister, Sornborger, and
+  Suba{\c{s}}{\i}]{jennings2025}
+David Jennings, Matteo Lostaglio, Sam Pallister, Andrew~T. Sornborger, and
+  Yi{\u{g}}it Suba{\c{s}}{\i}.
+\newblock Randomized adiabatic quantum linear solver algorithm with optimal
+  complexity scaling and detailed running costs.
+\newblock \emph{PRX Quantum}, 6:\penalty0 040373, 2025.
+
+\bibitem[Li(2025)]{li2025}
+Jianqiang Li.
+\newblock A new quantum linear system algorithm beyond the condition number and
+  its application to solving multivariate polynomial systems, 2025.
+
+\bibitem[Dalzell et~al.(2026)Dalzell, Li, and Su]{dalzell2026}
+Alexander~M. Dalzell, Jianqiang Li, and Yuan Su.
+\newblock Faster quantum linear system solver beyond the condition number,
+  2026.
+
+\bibitem[Shang(2026)]{shang2026}
+Zhong-Xia Shang.
+\newblock A simple quantum linear-system solver via dissipation, 2026.
+
+\end{thebibliography}
