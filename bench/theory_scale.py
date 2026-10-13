@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import os
 import sys
 import time
@@ -27,8 +28,34 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from data.generate import haar_orthogonal, sample_spectrum  # noqa: E402
-from hhl.residualization import budgeted_affine_residualization  # noqa: E402
+
+def _load_residualization():
+    """Load the classical residualization module without importing Qiskit."""
+    path = ROOT / "hhl" / "residualization.py"
+    spec = importlib.util.spec_from_file_location("residualization_standalone", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+budgeted_affine_residualization = _load_residualization().budgeted_affine_residualization
+
+
+def haar_orthogonal(n: int, rng: np.random.Generator) -> np.ndarray:
+    Q, R = np.linalg.qr(rng.normal(size=(n, n)))
+    return Q * np.sign(np.diag(R))
+
+
+def sample_spectrum(n: int, kappa: float, rng: np.random.Generator, signed: bool = False) -> np.ndarray:
+    if n == 1:
+        spectrum = np.array([1.0])
+    else:
+        inner = rng.uniform(-np.log10(kappa), 0.0, size=n - 2)
+        spectrum = 10.0 ** np.concatenate([[-np.log10(kappa), 0.0], inner])
+    if signed:
+        spectrum = spectrum * rng.choice([-1.0, 1.0], size=n)
+    return np.sort(spectrum)
 
 _SQRT2 = float(np.sqrt(2.0))
 _FIELDS = [
