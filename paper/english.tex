@@ -1,0 +1,309 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage[english]{babel}
+\babelfont{rm}{Times New Roman}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage[numbers,sort&compress]{natbib}
+
+\title{Affine residualization for HHL:\\
+methods, measured answers, and large-sample tests}
+\author{L\^e V\~u Quang Minh}
+\date{14 October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note records the method and the measured answers for a budgeted hybrid solver of \(Ax=b\).
+A classical step builds an explanation \(z\) on \(k\) eigenmodes.
+An HHL circuit is then tuned to the remaining spectrum, and the pieces are recombined as \(x=z+\lVert b_{\mathrm{res}}\rVert\, y\).
+On exact statevector simulation, with no device noise, solution fidelity stays at or above \(0.999\).
+Standard HHL has relative error about \(0.005\) to \(0.06\), mostly from phase-estimation discretization.
+When \(z\) is exact and the budget actually lowers \(\kappa_{\mathrm{eff}}\), the hybrid error falls to rounding level.
+The energy ranking does not guarantee that drop: one stored system with \(N=4\), \(\kappa=1000\), and \(k=1\) still has \(\kappa_{\mathrm{eff}}\) about \(1000\).
+On two million random Hermitian systems, an exact orthogonal split never exceeds \(\sqrt{2}\) by more than \(10^{-6}\), and a non-orthogonal shift exceeds it on every draw.
+A learned \(z\) does not replace the eigendecomposition.
+Against the Dalzell shortcut that costs about \(\kappa\ln(2\sqrt{2}/\varepsilon)\) block-encoding queries once the solution norm is known, exact deflation is cheaper only on spectra with a tight cluster of very small eigenvalues.
+The note claims neither a quantum speedup nor a wall-clock advantage over a dense solve.
+\end{abstract}
+
+\section{Method}
+
+\subsection{What is solved}
+The target is a linear system \(Ax=b\).
+The implementation takes \(A\) Hermitian, \(A=U\operatorname{diag}(\lambda)U^{\mathsf H}\), with coefficients \(\beta=U^{\mathsf H}b\).
+A non-Hermitian matrix is embedded as
+\[
+\begin{bmatrix}0&A\\ A^{\mathsf T}&0\end{bmatrix},
+\]
+which has spectrum \(\pm\sigma_i\), and the clock register is signed.
+Dimensions that are not powers of two are padded.
+The code does not build a variational quantum linear solver and does not measure its gradient.
+Barren plateaus are a motive for caring about \(\kappa\), not a measured quantity \citep{bravoprieto2023}.
+
+HHL prepares a state proportional to \(A^{-1}b\) when \(A\) is sparse and \(\kappa\) is moderate \citep{harrow2009}.
+The circuit used here is an exact statevector simulation.
+The unitary \(e^{iAt}\) is applied as an exact \texttt{UnitaryGate}, not as a Trotter formula or a linear combination of unitaries \citep{gilyen2019}.
+Compiled CX counts are therefore a trend under that expansion, not a hardware gate count.
+Scaling in \(N\) for a genuine HHL advantage also needs a sparse block-encoding of \(A\) and an efficient preparation of \(\lvert b\rangle\).
+Those assumptions are absent from the dense circuits in this study.
+Later solvers reach \(O(\kappa\log(1/\varepsilon))\) queries \citep{costa2022,dalzell2024}.
+
+\subsection{Affine split}
+Preconditioning replaces \(A\) by \(MA\) \citep{clader2013}.
+Affine residualization does not.
+It splits the solution and leaves \(A\) unchanged:
+\begin{equation}
+  x=z+y.
+  \label{eq:split}
+\end{equation}
+The classical vector \(z\) carries the modes assigned to the budget.
+The circuit solves the rest.
+With the Hermitian eigenbasis,
+\begin{equation}
+  z=\sum_{i\in R}\frac{\beta_i}{\lambda_i}u_i,
+  \qquad
+  b_{\mathrm{res}}=P_{\mathrm{keep}}(b-Az),
+  \qquad
+  x=z+\lVert b_{\mathrm{res}}\rVert\, y,
+  \label{eq:hybrid}
+\end{equation}
+where \(y\) is the HHL state for the normalized residual \(b_{\mathrm{res}}/\lVert b_{\mathrm{res}}\rVert\), and \(R\) is the set of removed modes.
+Equation~\eqref{eq:split} is~\eqref{eq:hybrid} after the residual norm has been absorbed into \(y\).
+The projector \(P_{\mathrm{keep}}\) is required.
+A leftover piece \(\eta u_j\) on a removed mode is returned by an exact solve as \((\eta/\lambda_j)u_j\).
+
+The budget \(k\) is spent in one of two ways.
+The energy score of a mode is
+\begin{equation}
+  E_j=\Bigl\lvert\frac{\beta_j}{\lambda_j}\Bigr\rvert.
+\end{equation}
+The \texttt{energy} rule puts the \(k\) largest scores into \(z\).
+A small eigenvalue with a tiny overlap \(\beta_j\) need not be selected.
+The \texttt{smallest} rule removes the \(k\) eigenvalues of smallest magnitude.
+Only that rule forces
+\begin{equation}
+  \kappa_{\mathrm{eff}}
+  =\frac{\max_{i\notin R}\lvert\lambda_i\rvert}{\min_{i\notin R}\lvert\lambda_i\rvert}
+  =\frac{\lvert\lambda\rvert_{\max}}{\lvert\lambda\rvert_{k+1}}
+  \le\kappa,
+\end{equation}
+when the eigenvalues are ordered by increasing magnitude.
+Equality holds when \(\lvert\lambda_{k+1}\rvert=\lvert\lambda_{\min}\rvert\).
+The inequality does not force \(\kappa_{\mathrm{eff}}\) near \(1\).
+
+If \(z\) is exactly the piece of \(x\) on the removed modes, those modes are orthogonal to the remainder and
+\begin{equation}
+  \lVert x\rVert^2=\lVert z\rVert^2+\lVert x-z\rVert^2.
+  \label{eq:pythagoras}
+\end{equation}
+Cauchy--Schwarz then gives
+\begin{equation}
+  \Lambda_z=\frac{\lVert z\rVert+\lVert x-z\rVert}{\lVert x\rVert}\le\sqrt{2},
+\end{equation}
+with equality when the two norms are equal.
+This ceiling uses \(z\perp(x-z)\).
+It is not a bound for an arbitrary explanation \(\hat z=z+\delta\).
+
+\subsection{Two circuits when \(z\) is inexact}
+Let \(\hat z=z+\delta\), and assume the residual solver is exact.
+\begin{itemize}
+  \item Reduced mode sets \(b_{\mathrm{res}}=P_{\mathrm{keep}}(b-A\hat z)\) and tunes phase estimation to \(\kappa_{\mathrm{eff}}\).
+  The assembled error is \(P_{\mathrm{hard}}\delta\), so the relative error is \(\lVert P_{\mathrm{hard}}\delta\rVert/\lVert x\rVert\).
+  A component of \(\delta\) in a removed mode is invisible to that circuit.
+  \item Full mode keeps the raw residual \(b-A\hat z\).
+  Exact arithmetic returns \(x\).
+  The residual still carries the eigenvalues in \(R\), so the circuit is sized by the original \(\kappa\).
+\end{itemize}
+A \(10\%\) error on a removed mode is about a \(10\%\) solution error when \(\lVert z\rVert\) is close to \(\lVert x\rVert\).
+The factor in general is \(\lVert z\rVert/\lVert x\rVert\).
+With phase estimation, the full circuit only reaches the HHL discretization floor, about \(10^{-3}\) to \(10^{-2}\) in the trials below, and the CX count returns to the full circuit.
+One illustration used \(1{,}435\) CX in the full circuit and \(185\) CX in the reduced circuit.
+
+Clock length, evolution time, and the rotation constant \(C\) are taken from the targeted spectrum.
+The clock is capped at \(12\) qubits, so \(\kappa=10^{4}\) on the small grid is resolution-limited.
+Under perfect phase estimation, \(\lVert b\rVert=1\), and \(C\) no larger than the smallest targeted eigenvalue,
+\begin{equation}
+  P(\text{ancilla}=1)=\sum_i\lvert\beta_i\rvert^2(C/\lambda_i)^2,
+\end{equation}
+summed over the targeted spectrum.
+Removing a mode that already sat at a full rotation can lower this probability.
+
+\subsection{What the large tests check}
+The scale tests call \texttt{bench/theory\_scale.py}.
+Each draw is a Hermitian matrix with a log-uniform spectrum.
+Its condition number is drawn log-uniformly from \(10\) to \(10^{4}\).
+
+The residual is solved by \texttt{numpy.linalg.solve}.
+That call stands in for an exact HHL step.
+No quantum circuit is run in that test.
+One random stream is used for each pair of size, budget, and ranking.
+A smaller sample count is a prefix of the larger count on the same stream.
+
+The checks on every draw are the recombination error, orthogonality of an exact split, and the ratio \(\Lambda_z\).
+They also check the smallest-magnitude formula for \(\kappa_{\mathrm{eff}}\), the reduced-mode identity for a \(10\%\) hard-mode error, recovery by the raw residual, and a shift of size \(40\lVert x\rVert\) along a kept mode.
+A draw is counted as stuck when \(\kappa_{\mathrm{eff}}>0.99\kappa\).
+
+\section{Measured answers}
+
+\subsection{Statevector grid}
+Every HHL circuit below is an exact statevector, with no device noise, and \(N\le 8\) except in the query model.
+The resource grid draws two random systems for each pair \((N,\kappa)\), uses the energy rule, and reports the mean.
+Spectra are log-uniform on \([1/\kappa,1]\).
+
+Fidelity \(\lvert\langle\hat x\vert x\rangle\rvert^2\) stays at or above \(0.999\) on every averaged cell.
+Standard HHL (\(k=0\)) has relative error from about \(5\cdot 10^{-3}\) to \(6\cdot 10^{-2}\).
+Most of that error is discretization of the solution norm, not a wrong direction of \(\lvert x\rangle\).
+
+When \(z\) is exact and the budget brings \(\kappa_{\mathrm{eff}}\) near \(1\), the relative error falls to \(10^{-16}\)--\(10^{-14}\).
+At \(N=4\), \(\kappa=1000\), standard HHL has error \(5.2\cdot 10^{-3}\); with \(k=3\) the mean hybrid error is \(8.6\cdot 10^{-14}\).
+The same cell with \(k=1\) still has error \(5.3\cdot 10^{-3}\), level with standard HHL, because the energy rule did not remove the eigenvalue that sets \(\kappa\).
+
+An emulated QSVT polynomial accurate to \(\varepsilon=10^{-2}\), on the four timed systems below, has relative error from \(6\cdot 10^{-5}\) to \(4\cdot 10^{-3}\) and fidelity from \(0.99999\).
+That error is the polynomial error, not phase estimation.
+
+At \(N=4\), \(\kappa=1000\), standard HHL uses \(12\) clock qubits, depth \(8{,}800\), and \(4{,}637\) CX gates after compilation to \(\{u,\mathrm{CX}\}\) at optimization level \(1\).
+With \(k=2\), the means are about \(4.5\) clock qubits, depth \(266\), and \(159\) CX.
+At \(N=8\), \(\kappa=1000\), the CX count falls from \(5{,}632\) (\(k=0\)) to \(1{,}277\) (\(k=3\)).
+Absolute CX counts depend on the expansion of a general unitary.
+The decrease with \(k\) is the result.
+
+Success probability does not always rise.
+On the grid at \(N=4\), \(\kappa=10\), \(k=1\), the mean probability is about \(0.18\), against about \(0.41\) at \(k=0\).
+
+\subsection{Neural estimate of \(z\)}
+A full Hermitian eigendecomposition already yields \(x_i=\beta_i/\lambda_i\).
+The quantum step adds no information once those pairs are known.
+An MLP was trained to predict \(z\) without that decomposition.
+The median relative error \(\lVert\hat z-z\rVert/\lVert z\rVert\) is \(0.68\) at \(N=2\) (\(8{,}000\) training samples, \(1{,}000\) test samples) and \(0.95\) at \(N=4\) with the same sample size.
+At \(N=8\), with \(400\) training samples, the median is \(0.99\).
+Reduced-mode solution error follows this error: median \(0.67\) at \(N=2\) and \(0.84\) at \(N=4\).
+There is no evidence here for an \(O(N)\) or \(O(N^2)\) predictor with a small enough error.
+
+\subsection{Simulator wall time}
+Times below are one system per cell, a fixed seed, the \texttt{smallest} rule, and no circuit compilation, in milliseconds.
+\texttt{numpy.linalg.solve} stays under \(0.01\,\mathrm{ms}\) with relative error \(0\) at these sizes.
+
+\begin{center}
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+\(N\) & \(\kappa\) & NumPy & HHL & Hybrid \(k=1\) & Hybrid + QSVT & Full QSVT \\
+\midrule
+4 & 100 & 0.007 & 266 & 53 & 0.36 & 0.43 \\
+4 & 1000 & 0.005 & 1{,}834 & 89 & 0.35 & 0.67 \\
+8 & 100 & 0.006 & 897 & 458 & 0.40 & 0.35 \\
+8 & 1000 & 0.005 & 9{,}352 & 11{,}045 & 0.54 & 1.02 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+When one removed mode shortens the clock, the hybrid simulation is faster than standard HHL.
+At \(N=4\), \(\kappa=1000\), the time falls from \(1.8\,\mathrm{s}\) to \(0.09\,\mathrm{s}\), and the relative error falls from \(5.2\cdot 10^{-3}\) to \(1.7\cdot 10^{-3}\).
+When one mode is not enough, the simulation is not faster and can be less accurate.
+At \(N=8\), \(\kappa=1000\), the hybrid run takes \(11.0\,\mathrm{s}\) against \(9.4\,\mathrm{s}\) for standard HHL, with relative error \(0.062\) against \(0.0076\) and fidelity \(0.998\).
+The QSVT times are an eigenvalue polynomial, not a quantum circuit.
+
+\subsection{Query model}
+The unit is one call to a block-encoding of \(A/\lVert A\rVert\).
+The Dalzell shortcut, once the solution norm is known, costs \(\kappa\ln(2\sqrt{2}/\varepsilon)\) \citep{dalzell2024}.
+The comparison uses medians of \(24\) systems at \(N=64\) and \(\varepsilon=10^{-2}\).
+On the log-uniform family, removing up to eight modes exactly and then running QSVT remains more expensive than that shortcut: at \(\kappa=10^{4}\), \(6.4\cdot 10^{5}\) queries against \(5.6\cdot 10^{4}\).
+Textbook HHL in the same cell is \(2.4\cdot 10^{8}\).
+On a spectrum with eight eigenvalues of size \(1/\kappa\) and the rest in \([0.1,1]\), removing those modes exactly leaves about \(780\) queries, against \(5.6\cdot 10^{4}\) for the shortcut.
+At \(\kappa=100\) on that same clustered spectrum, the shortcut is again cheaper (\(564\) against about \(750\)).
+The classical cost of the exact eigendecomposition is not included.
+Once those eigenpairs are known, \(Ax=b\) is already solved.
+
+Adaptive Lanczos, with \(k\le 8\) and at most half of \(N\) matrix--vector products, did not converge any small mode in the families tried, and the solver fell back to QSVT on the full spectrum.
+Related uses of the words ``residual'' and ``affine'' denote different objects: a joint block-encoding of \(A\) and \(b\) \citep{li2025,dalzell2026}, and a Lindbladian encoding of a residual \citep{shang2026}.
+
+\section{Large-sample tests}
+\label{sec:scale}
+
+\subsection{One million systems}
+On 9 October 2026, six streams were run to \(10^{6}\) draws: \(N=2,4,8\), \(k=1\), both rankings.
+Checkpoints at \(10^{4}\) and \(10^{5}\) are prefixes of the same streams.
+The full table is \texttt{bench/theory\_scale\_log.csv}.
+
+Across all one million systems, the recombination error stays at most \(5.2\cdot 10^{-12}\).
+No exact split exceeds \(\sqrt{2}\) by more than \(10^{-6}\).
+The smallest-magnitude formula for \(\kappa_{\mathrm{eff}}\) matches on every such system.
+A \(10\%\) hard-mode error matches the reduced-mode identity to \(5.2\cdot 10^{-12}\), and the raw residual clears it below \(1.2\cdot 10^{-12}\).
+A shift along a kept mode exceeds \(\sqrt{2}\) on every system.
+
+The stuck counts, \(\kappa_{\mathrm{eff}}>0.99\kappa\), barely move as the prefix grows.
+
+\begin{center}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+\(N\) & rule & \(10^{4}\) & \(10^{5}\) & \(10^{6}\) \\
+\midrule
+2 & smallest & 0 & 0 & 0 \\
+2 & energy & 0 & 0 & 0 \\
+4 & smallest & 40 & 449 & 4{,}056 \\
+4 & energy & 1{,}883 & 18{,}961 & 190{,}957 \\
+8 & smallest & 99 & 1{,}168 & 11{,}808 \\
+8 & energy & 3{,}625 & 37{,}134 & 369{,}657 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+At one million draws the energy rule is still stuck on \(19.1\%\) of the \(N=4\) systems and \(37.0\%\) of the \(N=8\) systems.
+The smallest-magnitude rule is stuck on \(0.41\%\) and \(1.18\%\).
+
+\subsection{Two million systems, larger than the first test}
+On 13 October 2026 the same checker was run to \(2\times 10^{6}\) draws, with \(N\in\{2,4,8,16\}\) and budgets \(k=1,2\).
+That is fourteen streams.
+The one-million row of each stream is a prefix of the two-million row.
+For \(N\in\{2,4,8\}\) and \(k=1\), that prefix matches the section above.
+The raw rows are \texttt{bench/theory\_scale\_log\_2e6.csv}.
+
+On all \(2\times 10^{6}\) systems in every stream:
+\begin{itemize}
+  \item recombination error stays at most \(5.9\times 10^{-12}\);
+  \item no exact split has \(\Lambda_z>\sqrt{2}+10^{-6}\), and the largest stored value sits on \(\sqrt{2}\) within a unit in the last place;
+  \item the smallest-magnitude formula matches on every such system, and \(\kappa_{\mathrm{eff}}\) never exceeds \(\kappa\);
+  \item a \(10\%\) hard-mode error agrees with \(\lVert P_{\mathrm{hard}}\delta\rVert/\lVert x\rVert\) to at most \(5.9\times 10^{-12}\), and the raw residual returns an error below \(1.5\times 10^{-12}\);
+  \item a shift of size \(40\lVert x\rVert\) along a kept mode exceeds \(\sqrt{2}\) on every system.
+\end{itemize}
+
+Stuck counts at \(2\times 10^{6}\) draws:
+
+\begin{center}
+\begin{tabular}{@{}llrr@{}}
+\toprule
+\(N\) & \(k\) & smallest & energy \\
+\midrule
+2 & 1 & 0 (0\%) & 0 (0\%) \\
+4 & 1 & 8{,}152 (0.41\%) & 381{,}823 (19.1\%) \\
+4 & 2 & 8 (0.0004\%) & 74{,}534 (3.73\%) \\
+8 & 1 & 23{,}956 (1.20\%) & 738{,}912 (36.9\%) \\
+8 & 2 & 138 (0.0069\%) & 338{,}971 (16.9\%) \\
+16 & 1 & 56{,}014 (2.80\%) & 1{,}074{,}123 (53.7\%) \\
+16 & 2 & 834 (0.042\%) & 672{,}049 (33.6\%) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+At \(N=2\), removing one mode leaves a single eigenvalue, so \(\kappa_{\mathrm{eff}}=1\).
+At \(N=16\) and \(k=1\), the energy rule leaves the condition number essentially unchanged on more than half of the draws.
+The rates do not fall when the sample grows from \(10^{6}\) to \(2\times 10^{6}\).
+
+\subsection{Answer}
+The large tests verify the classical split of the hybrid method when \(z\) is the exact eigen-piece and the residual solver is exact.
+They verify the reduced-mode error identity and the recovery identity of the raw residual in exact arithmetic.
+They also verify that the \(\sqrt{2}\) ceiling holds for that orthogonal split and fails for a cancelling explanation.
+
+They do not verify the HHL circuit at these sample sizes.
+They do not verify a learned \(z\).
+They do not verify a quantum speedup or a wall-clock advantage over a dense solve.
+The statevector grid, which does run HHL, stops at \(N=8\) and uses an exact unitary rather than an optimized Hamiltonian simulation.
+Removing modes by a full eigendecomposition has already solved \(Ax=b\).
+
+\bibliographystyle{unsrtnat}
+\bibliography{refs}
+
+\end{document}
